@@ -1,120 +1,140 @@
+import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Plus, Sparkles } from "lucide-react";
-import TransactionList from "../components/TransactionList";
-import ProgressBar from "../components/ProgressBar";
-import { transactions, budgets, goals } from "../data/mockData";
-import { money } from "../utils/currency";
+import { Link } from "react-router-dom";
+import { apiFetch, getStoredUser } from "../services/api";
+import { formatCurrency, formatDate } from "../utils/currency";
 export default function Dashboard() {
+  const user = getStoredUser();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    apiFetch("/analytics/dashboard")
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, []);
+  if (!data && !error)
+    return <div className="loading-state">Loading Finora...</div>;
   return (
-    <div className="content">
-      <section className="heading">
+    <div className="page-content">
+      <section className="page-heading">
         <div>
-          <span className="eyebrow">September 2026</span>
-          <h1>Good evening, Jay.</h1>
-          <p>Here’s what your money is doing today.</p>
+          <span className="eyebrow">Your financial overview</span>
+          <h1>Good to see you, {user?.full_name?.split(" ")[0] || "there"}.</h1>
+          <p>Your dashboard is powered by real data.</p>
         </div>
-        <button className="primary">
+        <Link className="primary-button" to="/transactions/new">
           <Plus size={18} />
           Add transaction
-        </button>
+        </Link>
       </section>
-      <section className="balance-card">
-        <div>
-          <span>Available balance</span>
-          <h2>KSh 18,450</h2>
-          <div className="balance-meta">
-            <span>
-              <ArrowUpRight size={15} />
-              KSh 32,000 income
-            </span>
-            <span>
-              <ArrowDownRight size={15} />
-              KSh 13,550 spent
-            </span>
-          </div>
-        </div>
-        <div className="safe-card">
-          <Sparkles />
-          <div>
-            <span>Safe to spend</span>
-            <strong>KSh 13,650</strong>
-            <small>After upcoming commitments</small>
-          </div>
-        </div>
-      </section>
-      <section className="stats">
-        <div className="stat">
-          <span>Income</span>
-          <strong>KSh 32,000</strong>
-          <small>+8.4% vs last month</small>
-        </div>
-        <div className="stat">
-          <span>Expenses</span>
-          <strong>KSh 13,550</strong>
-          <small>42% of monthly income</small>
-        </div>
-        <div className="stat">
-          <span>Saved</span>
-          <strong>KSh 6,200</strong>
-          <small>19.4% savings rate</small>
-        </div>
-        <div className="stat">
-          <span>Upcoming bills</span>
-          <strong>KSh 9,850</strong>
-          <small>3 payments due</small>
-        </div>
-      </section>
-      <section className="dashboard-grid">
-        <article className="panel transactions-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Recent activity</span>
-              <h3>Transactions</h3>
+      {error ? (
+        <div className="auth-error">{error}</div>
+      ) : (
+        <>
+          <section className="hero-balance">
+            <div className="hero-balance-main">
+              <span>Available balance</span>
+              <h2>{formatCurrency(data.available_balance)}</h2>
+              <div className="hero-balance-meta">
+                <span>
+                  <ArrowUpRight size={16} />
+                  {formatCurrency(data.income_this_month)} income
+                </span>
+                <span>
+                  <ArrowDownRight size={16} />
+                  {formatCurrency(data.expenses_this_month)} spent
+                </span>
+              </div>
             </div>
-          </div>
-          <TransactionList items={transactions.slice(0, 5)} />
-        </article>
-        <article className="panel">
-          <span className="eyebrow">This month</span>
-          <h3>Budget overview</h3>
-          <div className="stack">
-            {budgets.slice(0, 3).map((b) => {
-              const p = (b.spent / b.limit) * 100;
-              return (
-                <div key={b.id}>
-                  <div className="row">
-                    <strong>{b.name}</strong>
-                    <span>{Math.round(p)}%</span>
-                  </div>
-                  <ProgressBar value={p} />
-                  <small>
-                    {money(b.spent)} of {money(b.limit)}
-                  </small>
+            <div className="safe-spend-card">
+              <div className="safe-spend-icon">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <span>Safe to spend</span>
+                <strong>{formatCurrency(data.safe_to_spend)}</strong>
+                <small>After upcoming bills</small>
+              </div>
+            </div>
+          </section>
+          <section className="stats-grid">
+            <article className="stat-card success">
+              <span className="eyebrow">Income</span>
+              <strong>{formatCurrency(data.income_this_month)}</strong>
+              <small>This month</small>
+            </article>
+            <article className="stat-card">
+              <span className="eyebrow">Expenses</span>
+              <strong>{formatCurrency(data.expenses_this_month)}</strong>
+              <small>This month</small>
+            </article>
+            <article className="stat-card warning">
+              <span className="eyebrow">Upcoming</span>
+              <strong>{formatCurrency(data.upcoming_bills)}</strong>
+              <small>Next 30 days</small>
+            </article>
+            <article className="stat-card">
+              <span className="eyebrow">Transactions</span>
+              <strong>{data.recent_transactions?.length || 0}</strong>
+              <small>Recent entries</small>
+            </article>
+          </section>
+          <section className="dashboard-grid">
+            <article className="panel panel-large">
+              <div className="panel-heading">
+                <div>
+                  <span className="eyebrow">Recent activity</span>
+                  <h3>Transactions</h3>
                 </div>
-              );
-            })}
-          </div>
-        </article>
-        <article className="panel">
-          <span className="eyebrow">Savings</span>
-          <h3>Goals</h3>
-          <div className="stack">
-            {goals.slice(0, 2).map((g) => {
-              const p = (g.saved / g.target) * 100;
-              return (
-                <div key={g.id}>
-                  <div className="row">
-                    <strong>{g.name}</strong>
-                    <span>{Math.round(p)}%</span>
+                <Link className="ghost-button" to="/transactions">
+                  View all
+                </Link>
+              </div>
+              {data.recent_transactions?.length ? (
+                data.recent_transactions.map((t) => (
+                  <div className="transaction-row" key={t.id}>
+                    <div className="transaction-left">
+                      <div>
+                        <strong>
+                          {t.merchant || t.description || t.transaction_type}
+                        </strong>
+                        <span>
+                          {t.category?.name || t.transaction_type} ·{" "}
+                          {formatDate(t.transaction_date)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="transaction-right">
+                      <strong
+                        className={
+                          t.transaction_type === "income" ? "income" : ""
+                        }
+                      >
+                        {t.transaction_type === "income"
+                          ? "+"
+                          : t.transaction_type === "expense"
+                            ? "-"
+                            : ""}
+                        {formatCurrency(t.amount)}
+                      </strong>
+                    </div>
                   </div>
-                  <ProgressBar value={p} />
-                  <small>{money(g.saved)} saved</small>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-      </section>
+                ))
+              ) : (
+                <div className="empty-state">No transactions yet.</div>
+              )}
+            </article>
+            <article className="panel">
+              <span className="eyebrow">Next step</span>
+              <h3>Make Finora yours</h3>
+              <p className="muted">
+                Add your real accounts, then record income, spending, goals and
+                bills.
+              </p>
+            </article>
+          </section>
+        </>
+      )}
     </div>
   );
 }
-

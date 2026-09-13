@@ -3,14 +3,16 @@ import {
   BellRing,
   CircleDollarSign,
   LayoutDashboard,
+  LogOut,
   PiggyBank,
   ReceiptText,
   Settings,
   Target,
   WalletCards,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
-const links = [
+import { NavLink, useNavigate } from "react-router-dom";
+import { clearSession } from "../services/api";
+const items = [
   ["/", "Overview", LayoutDashboard],
   ["/transactions", "Transactions", ReceiptText],
   ["/budgets", "Budgets", CircleDollarSign],
@@ -21,6 +23,7 @@ const links = [
   ["/settings", "Settings", Settings],
 ];
 export default function Sidebar() {
+  const navigate = useNavigate();
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -32,23 +35,29 @@ export default function Sidebar() {
           <span>Your money, clearly.</span>
         </div>
       </div>
-      <nav>
-        {links.map(([to, label, Icon]) => (
+      <nav className="sidebar-nav">
+        {items.map(([to, label, Icon]) => (
           <NavLink
             key={to}
             to={to}
             end={to === "/"}
-            className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+            className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
           >
-            <Icon size={18} />
-            {label}
+            <Icon size={19} />
+            <span>{label}</span>
           </NavLink>
         ))}
       </nav>
-      <div className="safe-mini">
-        <span>Safe to spend</span>
-        <strong>KSh 13,650</strong>
-      </div>
+      <button
+        className="logout-button"
+        onClick={() => {
+          clearSession();
+          navigate("/login");
+        }}
+      >
+        <LogOut size={18} />
+        Sign out
+      </button>
     </aside>
   );
 }

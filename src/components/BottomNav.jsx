@@ -1,66 +1,34 @@
 import {
   Home,
   ReceiptText,
-  WalletCards,
   Target,
+  WalletCards,
   MoreHorizontal,
 } from "lucide-react";
-
 import { NavLink } from "react-router-dom";
-
+const links = [
+  ["/", "Home", Home],
+  ["/transactions", "Activity", ReceiptText],
+  ["/budgets", "Budgets", WalletCards],
+  ["/goals", "Goals", Target],
+  ["/settings", "More", MoreHorizontal],
+];
 export default function BottomNav() {
   return (
     <nav className="bottom-nav">
-      <NavLink
-        to="/"
-        end
-        className={({ isActive }) =>
-          `bottom-nav-item ${isActive ? "active" : ""}`
-        }
-      >
-        <Home size={20} />
-        <span>Home</span>
-      </NavLink>
-
-      <NavLink
-        to="/transactions"
-        className={({ isActive }) =>
-          `bottom-nav-item ${isActive ? "active" : ""}`
-        }
-      >
-        <ReceiptText size={20} />
-        <span>Transactions</span>
-      </NavLink>
-
-      <NavLink
-        to="/budgets"
-        className={({ isActive }) =>
-          `bottom-nav-item ${isActive ? "active" : ""}`
-        }
-      >
-        <WalletCards size={20} />
-        <span>Budgets</span>
-      </NavLink>
-
-      <NavLink
-        to="/goals"
-        className={({ isActive }) =>
-          `bottom-nav-item ${isActive ? "active" : ""}`
-        }
-      >
-        <Target size={20} />
-        <span>Goals</span>
-      </NavLink>
-
-      <NavLink
-        to="/settings"
-        className={({ isActive }) =>
-          `bottom-nav-item ${isActive ? "active" : ""}`
-        }
-      >
-        <MoreHorizontal size={20} />
-        <span>More</span>
-      </NavLink>
+      {links.map(([to, label, Icon]) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={to === "/"}
+          className={({ isActive }) =>
+            `bottom-item ${isActive ? "active" : ""}`
+          }
+        >
+          <Icon size={19} />
+          <span>{label}</span>
+        </NavLink>
+      ))}
     </nav>
   );
 }
