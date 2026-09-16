@@ -5,8 +5,10 @@ export function formatCurrency(value = 0, currency = "KES") {
     maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
+
 export function formatDate(value) {
   if (!value) return "";
+
   return new Intl.DateTimeFormat("en-KE", {
     day: "numeric",
     month: "short",
