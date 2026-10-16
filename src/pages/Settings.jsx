@@ -123,7 +123,7 @@ export default function Settings() {
         const {
           user,
         } = await apiFetch(
-          "/users/me"
+          "/auth/me"
         );
 
         setProfile({

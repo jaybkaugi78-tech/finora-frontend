@@ -1,7 +1,5 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+
+import { useEffect, useState } from "react";
 
 import {
   Bell,
@@ -17,85 +15,55 @@ import {
   Trash2,
 } from "lucide-react";
 
-import {
-  apiFetch,
-} from "../services/api";
+import { apiFetch } from "../services/api";
 
 
-function NotificationIcon({
-  type,
-}) {
-  if (
-    type === "bill_overdue"
-  ) {
-    return (
-      <Clock3 size={19} />
-    );
+function NotificationIcon({ type }) {
+  if (type === "bill_overdue") {
+    return <Clock3 size={19} />;
   }
 
   if (
+    type === "bill" ||
     type === "bill_due" ||
     type === "bill_reminder"
   ) {
-    return (
-      <ReceiptText size={19} />
-    );
+    return <ReceiptText size={19} />;
   }
 
-  if (
-    type === "transaction"
-  ) {
-    return (
-      <CreditCard size={19} />
-    );
+  if (type === "transaction") {
+    return <CreditCard size={19} />;
   }
 
-  if (
-    type === "general"
-  ) {
-    return (
-      <Info size={19} />
-    );
+  if (type === "general") {
+    return <Info size={19} />;
   }
 
-  return (
-    <Bell size={19} />
-  );
+  return <Bell size={19} />;
 }
 
 
-function formatNotificationDate(
-  value
-) {
-  if (!value) {
+function formatNotificationDate(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
     return "";
   }
 
-  const date = new Date(
-    value
-  );
-
   const now = new Date();
 
-  const diff =
-    now.getTime()
-    - date.getTime();
-
-  const minutes = Math.floor(
-    diff / 60000
+  const diff = Math.max(
+    0,
+    now.getTime() - date.getTime()
   );
 
-  const hours = Math.floor(
-    diff / 3600000
-  );
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
 
-  const days = Math.floor(
-    diff / 86400000
-  );
-
-  if (minutes < 1) {
-    return "Just now";
-  }
+  if (minutes < 1) return "Just now";
 
   if (minutes < 60) {
     return `${minutes}m ago`;
@@ -109,107 +77,108 @@ function formatNotificationDate(
     return `${days}d ago`;
   }
 
-  return date.toLocaleDateString(
-    "en-KE",
-    {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }
-  );
+  return date.toLocaleDateString("en-KE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 
 export default function Notifications() {
-  const [items, setItems] =
-    useState(null);
+  const [items, setItems] = useState(null);
 
-  const [filter, setFilter] =
-    useState("all");
+  const [filter, setFilter] = useState("all");
 
-  const [
-    unreadCount,
-    setUnreadCount,
-  ] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
-  const [totalCount, setTotalCount] =
-    useState(0);
+  const [error, setError] = useState("");
 
-  const [error, setError] =
-    useState("");
+  const [workingId, setWorkingId] = useState(null);
+  const [workingAll, setWorkingAll] = useState(false);
 
-  const [workingId, setWorkingId] =
-    useState(null);
-
-  const [workingAll, setWorkingAll] =
-    useState(false);
-
-
-  async function load(
-    selectedFilter = filter
-  ) {
-    try {
-      setError("");
-
-      const data = await apiFetch(
-        `/notifications?filter=${selectedFilter}`
-      );
-
-      setItems(
-        data.notifications || []
-      );
-
-      setUnreadCount(
-        data.unread_count || 0
-      );
-
-      setTotalCount(
-        data.total_count || 0
-      );
-
-    } catch (err) {
-      setError(
-        err.message
-      );
-
-      setItems([]);
-    }
-  }
+  const [refreshKey, setRefreshKey] = useState(0);
 
 
   useEffect(() => {
-    load(filter);
-  }, [filter]);
+    let cancelled = false;
 
+    async function loadNotifications() {
+      try {
+        setError("");
 
-  async function markRead(
-    notification
-  ) {
-    if (
-      notification.is_read
-    ) {
-      return;
+        const data = await apiFetch(
+          `/notifications?filter=${encodeURIComponent(filter)}`
+        );
+
+        if (cancelled) return;
+
+        const notifications = Array.isArray(
+          data.notifications
+        )
+          ? data.notifications
+          : [];
+
+        setItems(notifications);
+
+        setUnreadCount(
+          Number(data.unread_count ?? 0)
+        );
+
+        setTotalCount(
+          Number(
+            data.total_count ??
+            notifications.length
+          )
+        );
+      } catch (err) {
+        if (cancelled) return;
+
+        setError(
+          err.message ||
+          "Unable to load notifications."
+        );
+
+        setItems([]);
+      }
     }
 
-    try {
-      setWorkingId(
-        notification.id
-      );
+    loadNotifications();
 
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, refreshKey]);
+
+
+  function reload() {
+    setRefreshKey((current) => current + 1);
+  }
+
+
+  async function markRead(notification) {
+    if (notification.is_read) return;
+
+    try {
+      setWorkingId(notification.id);
       setError("");
 
       await apiFetch(
-        `/notifications/${notification.id}/read`,
+        `/notifications/${notification.id}`,
         {
           method: "PATCH",
+          body: JSON.stringify({
+            is_read: true,
+          }),
         }
       );
 
-      await load();
-
+      reload();
     } catch (err) {
       setError(
-        err.message
+        err.message ||
+        "Could not mark notification as read."
       );
     } finally {
       setWorkingId(null);
@@ -217,28 +186,28 @@ export default function Notifications() {
   }
 
 
-  async function markUnread(
-    notification
-  ) {
-    try {
-      setWorkingId(
-        notification.id
-      );
+  async function markUnread(notification) {
+    if (!notification.is_read) return;
 
+    try {
+      setWorkingId(notification.id);
       setError("");
 
       await apiFetch(
-        `/notifications/${notification.id}/unread`,
+        `/notifications/${notification.id}`,
         {
           method: "PATCH",
+          body: JSON.stringify({
+            is_read: false,
+          }),
         }
       );
 
-      await load();
-
+      reload();
     } catch (err) {
       setError(
-        err.message
+        err.message ||
+        "Could not mark notification as unread."
       );
     } finally {
       setWorkingId(null);
@@ -247,9 +216,7 @@ export default function Notifications() {
 
 
   async function markAllRead() {
-    if (!unreadCount) {
-      return;
-    }
+    if (!unreadCount || workingAll) return;
 
     try {
       setWorkingAll(true);
@@ -258,15 +225,15 @@ export default function Notifications() {
       await apiFetch(
         "/notifications/read-all",
         {
-          method: "PATCH",
+          method: "POST",
         }
       );
 
-      await load();
-
+      reload();
     } catch (err) {
       setError(
-        err.message
+        err.message ||
+        "Could not mark all notifications as read."
       );
     } finally {
       setWorkingAll(false);
@@ -274,14 +241,9 @@ export default function Notifications() {
   }
 
 
-  async function deleteNotification(
-    notification
-  ) {
+  async function deleteNotification(notification) {
     try {
-      setWorkingId(
-        notification.id
-      );
-
+      setWorkingId(notification.id);
       setError("");
 
       await apiFetch(
@@ -291,11 +253,11 @@ export default function Notifications() {
         }
       );
 
-      await load();
-
+      reload();
     } catch (err) {
       setError(
-        err.message
+        err.message ||
+        "Could not delete notification."
       );
     } finally {
       setWorkingId(null);
@@ -304,31 +266,30 @@ export default function Notifications() {
 
 
   async function clearRead() {
-    const confirmed =
-      window.confirm(
-        "Clear all read notifications?"
-      );
+    if (workingAll) return;
 
-    if (!confirmed) {
-      return;
-    }
+    const confirmed = window.confirm(
+      "Clear all read notifications?"
+    );
+
+    if (!confirmed) return;
 
     try {
       setWorkingAll(true);
       setError("");
 
       await apiFetch(
-        "/notifications/read",
+        "/notifications/clear-read",
         {
           method: "DELETE",
         }
       );
 
-      await load();
-
+      reload();
     } catch (err) {
       setError(
-        err.message
+        err.message ||
+        "Could not clear read notifications."
       );
     } finally {
       setWorkingAll(false);
@@ -336,7 +297,7 @@ export default function Notifications() {
   }
 
 
-  if (!items) {
+  if (items === null) {
     return (
       <div className="loading-state">
         Loading notifications...
@@ -349,42 +310,29 @@ export default function Notifications() {
     <div className="page-content">
 
       <section className="page-heading">
-
         <div>
           <span className="eyebrow">
             Finora alerts
           </span>
 
-          <h1>
-            Notifications
-          </h1>
+          <h1>Notifications</h1>
 
           <p>
-            Your money reminders
-            live here.
+            Your money reminders live here.
           </p>
         </div>
-
 
         {unreadCount > 0 && (
           <button
             type="button"
             className="primary-button"
-            disabled={
-              workingAll
-            }
-            onClick={
-              markAllRead
-            }
+            disabled={workingAll}
+            onClick={markAllRead}
           >
-            <CheckCheck
-              size={17}
-            />
-
+            <CheckCheck size={17} />
             Mark all read
           </button>
         )}
-
       </section>
 
 
@@ -398,44 +346,25 @@ export default function Notifications() {
       <section className="notification-summary-grid">
 
         <article className="panel notification-summary-card">
-
           <div className="notification-summary-icon">
-            <BellRing
-              size={19}
-            />
+            <BellRing size={19} />
           </div>
 
           <div>
-            <span>
-              Unread
-            </span>
-
-            <strong>
-              {unreadCount}
-            </strong>
+            <span>Unread</span>
+            <strong>{unreadCount}</strong>
           </div>
-
         </article>
 
-
         <article className="panel notification-summary-card">
-
           <div className="notification-summary-icon">
-            <Mail
-              size={19}
-            />
+            <Mail size={19} />
           </div>
 
           <div>
-            <span>
-              Total
-            </span>
-
-            <strong>
-              {totalCount}
-            </strong>
+            <span>Total</span>
+            <strong>{totalCount}</strong>
           </div>
-
         </article>
 
       </section>
@@ -448,74 +377,47 @@ export default function Notifications() {
           <button
             type="button"
             className={
-              filter === "all"
-                ? "active"
-                : ""
+              filter === "all" ? "active" : ""
             }
-            onClick={() =>
-              setFilter("all")
-            }
+            onClick={() => setFilter("all")}
           >
             All
           </button>
 
-
           <button
             type="button"
             className={
-              filter === "unread"
-                ? "active"
-                : ""
+              filter === "unread" ? "active" : ""
             }
-            onClick={() =>
-              setFilter(
-                "unread"
-              )
-            }
+            onClick={() => setFilter("unread")}
           >
             Unread
 
             {unreadCount > 0 && (
-              <span>
-                {unreadCount}
-              </span>
+              <span>{unreadCount}</span>
             )}
           </button>
-
 
           <button
             type="button"
             className={
-              filter === "read"
-                ? "active"
-                : ""
+              filter === "read" ? "active" : ""
             }
-            onClick={() =>
-              setFilter("read")
-            }
+            onClick={() => setFilter("read")}
           >
             Read
           </button>
 
         </div>
 
-
-        {totalCount >
-          unreadCount && (
+        {totalCount > unreadCount && (
           <button
             type="button"
             className="ghost-button notification-clear-button"
-            disabled={
-              workingAll
-            }
-            onClick={
-              clearRead
-            }
+            disabled={workingAll}
+            onClick={clearRead}
           >
-            <Trash2
-              size={15}
-            />
-
+            <Trash2 size={15} />
             Clear read
           </button>
         )}
@@ -525,159 +427,116 @@ export default function Notifications() {
 
       <section className="panel notification-panel">
 
-        {items.length ? (
+        {items.length > 0 ? (
           <div className="notification-list">
 
-            {items.map(
-              (notification) => (
-                <article
-                  className={`notification-row ${
-                    notification.is_read
-                      ? "read"
-                      : "unread"
-                  }`}
-                  key={
-                    notification.id
+            {items.map((notification) => (
+              <article
+                key={notification.id}
+                className={`notification-row ${
+                  notification.is_read
+                    ? "read"
+                    : "unread"
+                }`}
+              >
+
+                <button
+                  type="button"
+                  className="notification-main"
+                  disabled={
+                    workingId === notification.id ||
+                    workingAll
                   }
+                  onClick={() => markRead(notification)}
                 >
+
+                  <div
+                    className={`notification-icon ${
+                      notification.notification_type ||
+                      "general"
+                    }`}
+                  >
+                    <NotificationIcon
+                      type={notification.notification_type}
+                    />
+                  </div>
+
+                  <div className="notification-content">
+
+                    <div className="notification-title-row">
+                      <strong>
+                        {notification.title}
+                      </strong>
+
+                      {!notification.is_read && (
+                        <span className="notification-unread-dot" />
+                      )}
+                    </div>
+
+                    <p>{notification.message}</p>
+
+                    <span className="notification-time">
+                      {formatNotificationDate(
+                        notification.created_at
+                      )}
+                    </span>
+
+                  </div>
+                </button>
+
+
+                <div className="notification-actions">
+
+                  {notification.is_read ? (
+                    <button
+                      type="button"
+                      title="Mark unread"
+                      disabled={
+                        workingId === notification.id ||
+                        workingAll
+                      }
+                      onClick={() => markUnread(notification)}
+                    >
+                      <Mail size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Mark read"
+                      disabled={
+                        workingId === notification.id ||
+                        workingAll
+                      }
+                      onClick={() => markRead(notification)}
+                    >
+                      <Check size={16} />
+                    </button>
+                  )}
 
                   <button
                     type="button"
-                    className="notification-main"
+                    title="Delete"
+                    className="notification-delete"
                     disabled={
-                      workingId ===
-                      notification.id
+                      workingId === notification.id ||
+                      workingAll
                     }
                     onClick={() =>
-                      markRead(
-                        notification
-                      )
+                      deleteNotification(notification)
                     }
                   >
-
-                    <div
-                      className={`notification-icon ${
-                        notification.notification_type ||
-                        "general"
-                      }`}
-                    >
-                      <NotificationIcon
-                        type={
-                          notification.notification_type
-                        }
-                      />
-                    </div>
-
-
-                    <div className="notification-content">
-
-                      <div className="notification-title-row">
-
-                        <strong>
-                          {
-                            notification.title
-                          }
-                        </strong>
-
-
-                        {!notification.is_read && (
-                          <span className="notification-unread-dot" />
-                        )}
-
-                      </div>
-
-
-                      <p>
-                        {
-                          notification.message
-                        }
-                      </p>
-
-
-                      <span className="notification-time">
-                        {formatNotificationDate(
-                          notification.created_at
-                        )}
-                      </span>
-
-                    </div>
-
+                    <Trash2 size={16} />
                   </button>
 
+                </div>
 
-                  <div className="notification-actions">
-
-                    {notification.is_read ? (
-                      <button
-                        type="button"
-                        title="Mark unread"
-                        disabled={
-                          workingId ===
-                          notification.id
-                        }
-                        onClick={() =>
-                          markUnread(
-                            notification
-                          )
-                        }
-                      >
-                        <Mail
-                          size={16}
-                        />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        title="Mark read"
-                        disabled={
-                          workingId ===
-                          notification.id
-                        }
-                        onClick={() =>
-                          markRead(
-                            notification
-                          )
-                        }
-                      >
-                        <Check
-                          size={16}
-                        />
-                      </button>
-                    )}
-
-
-                    <button
-                      type="button"
-                      title="Delete"
-                      className="notification-delete"
-                      disabled={
-                        workingId ===
-                        notification.id
-                      }
-                      onClick={() =>
-                        deleteNotification(
-                          notification
-                        )
-                      }
-                    >
-                      <Trash2
-                        size={16}
-                      />
-                    </button>
-
-                  </div>
-
-                </article>
-              )
-            )}
+              </article>
+            ))}
 
           </div>
         ) : (
           <div className="notification-empty">
-
-            <MailOpen
-              size={31}
-            />
+            <MailOpen size={31} />
 
             <strong>
               {filter === "unread"
@@ -688,11 +547,9 @@ export default function Notifications() {
             </strong>
 
             <span>
-              Finora will show
-              important money
+              Finora will show important money
               reminders here.
             </span>
-
           </div>
         )}
 
